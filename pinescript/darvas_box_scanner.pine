@@ -416,60 +416,60 @@ if showDash and barstate.islast
     table.cell(dash, 1, 0, syminfo.ticker, bgcolor=hdrColor, text_color=color.yellow, text_size=size.small)
 
     // Row 1 - Ceiling
-    table.cell(dash, 0, 1, "Box Ceiling",  bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 1, "Box Ceiling",  bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 1, na(boxCeiling) ? "n/a" : str.tostring(boxCeiling, format.mintick),
                bgcolor=defColor, text_color=color.aqua, text_size=size.small)
 
     // Row 2 - Floor
-    table.cell(dash, 0, 2, "Box Floor",    bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 2, "Box Floor",    bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 2, na(boxFloor) ? "n/a" : str.tostring(boxFloor, format.mintick),
                bgcolor=defColor, text_color=color.purple, text_size=size.small)
 
     // Row 3 - Box Width %
     boxWidth    = na(boxCeiling) or na(boxFloor) ? na : (boxCeiling - boxFloor) / boxFloor * 100.0
-    table.cell(dash, 0, 3, "Box Width %",  bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 3, "Box Width %",  bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 3, na(boxWidth) ? "n/a" : str.tostring(boxWidth, "#.##") + "%",
                bgcolor=defColor, text_color=color.white, text_size=size.small)
 
     // Row 4 - Distance to Ceiling (highlighted when near)
     distRowBg = isNear ? hotColor : defColor
     distClr   = isNear ? color.orange : color.white
-    table.cell(dash, 0, 4, "Dist to Ceil", bgcolor=distRowBg, text_color=color.gray, text_size=size.small)
+    table.cell(dash, 0, 4, "Dist to Ceil", bgcolor=distRowBg, text_color=color.white, text_size=size.small)
     table.cell(dash, 1, 4, na(distToCeil) ? "n/a" : str.tostring(distToCeil, "#.##") + "%",
                bgcolor=distRowBg, text_color=distClr, text_size=size.small)
 
     // Row 5 - Days in Box
-    table.cell(dash, 0, 5, "Days in Box",  bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 5, "Days in Box",  bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 5, boxActive ? str.tostring(daysInBox) : "n/a",
                bgcolor=defColor, text_color=color.white, text_size=size.small)
 
     // Row 6 - Status
     statusTxt = inPosition ? "IN POSITION" : isNear ? "APPROACHING!" : boxActive ? "WATCHING" : "NO BOX"
     statusClr = inPosition ? color.lime    : isNear ? color.orange   : boxActive ? color.yellow : color.gray
-    table.cell(dash, 0, 6, "Status",       bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 6, "Status",       bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 6, statusTxt,      bgcolor=defColor, text_color=statusClr,    text_size=size.small)
 
     // Row 7 - Entry Price
-    table.cell(dash, 0, 7, "Entry Price",  bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 7, "Entry Price",  bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 7, na(entryPrice) ? "n/a" : str.tostring(entryPrice, format.mintick),
                bgcolor=defColor, text_color=color.lime, text_size=size.small)
 
     // Row 8 - Stop Loss
-    table.cell(dash, 0, 8, "Stop Loss",    bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 8, "Stop Loss",    bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 8, na(stopLoss) ? "n/a" : str.tostring(stopLoss, format.mintick),
                bgcolor=defColor, text_color=color.orange, text_size=size.small)
 
     // Row 9 - Unrealised PnL
     pnlPct   = (not na(entryPrice) and entryPrice > 0) ? (close - entryPrice) / entryPrice * 100.0 : na
     pnlColor = na(pnlPct) ? color.gray : pnlPct >= 0.0 ? color.lime : color.red
-    table.cell(dash, 0, 9, "Unrealised PnL", bgcolor=defColor, text_color=color.gray, text_size=size.small)
+    table.cell(dash, 0, 9, "Unrealised PnL", bgcolor=defColor, text_color=color.white, text_size=size.small)
     table.cell(dash, 1, 9, na(pnlPct) ? "n/a" : str.tostring(pnlPct, "#.##") + "%",
                bgcolor=defColor, text_color=pnlColor, text_size=size.small)
 
     // Row 10 - Volume ratio
     volRatio  = volSMA > 0.0 ? volume / volSMA : na
     volTxtClr = na(volRatio) ? color.gray : volRatio >= volMultiplier ? color.lime : color.gray
-    table.cell(dash, 0, 10, "Vol vs SMA",  bgcolor=defColor, text_color=color.gray,   text_size=size.small)
+    table.cell(dash, 0, 10, "Vol vs SMA",  bgcolor=defColor, text_color=color.white,   text_size=size.small)
     table.cell(dash, 1, 10, na(volRatio) ? "n/a" : str.tostring(volRatio, "#.##") + "x",
                bgcolor=defColor, text_color=volTxtClr, text_size=size.small)
 
