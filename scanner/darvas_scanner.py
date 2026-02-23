@@ -64,6 +64,14 @@ CONFIG = {
     "min_rr":          1.0,    # minimum R:R ratio to classify as quality breakout
     "max_box_width":   35.0,   # ignore boxes wider than this % (too wide = not Darvas)
 
+    # Urgency tiers for APPROACHING stocks
+    # HOT  = imminent breakout — set TradingView alert + consider starter position
+    # WARM = closing in       — set TradingView alert today
+    "hot_dist_pct":    2.0,    # HOT if within this % of ceiling
+    "hot_vol_mult":    2.0,    # HOT requires this vol surge (elevated demand visible)
+    "warm_dist_pct":   4.0,    # WARM if within this % of ceiling
+    "warm_vol_mult":   1.3,    # WARM requires at least this vol (above average)
+
     # Scanner / watchlist settings
     "history_days":    420,    # days of history to download (>52 weeks)
     "proximity_pct":   7.0,    # flag APPROACHING when within this % of ceiling
@@ -362,9 +370,25 @@ def analyse(symbol: str, cfg: dict) -> dict | None:
     reward_pct = (mm_target - close) / close * 100 if close > 0 else None
     rr_ratio   = reward_pct / risk_pct if (risk_pct and risk_pct > 0) else None
 
+    # ── Urgency tier (for APPROACHING stocks) ────────────────
+    alert_tier = ""
+    if status == "APPROACHING":
+        if (dist_to_ceil <= cfg["hot_dist_pct"]
+                and vol_ratio >= cfg["hot_vol_mult"]):
+            alert_tier = "HOT"
+        elif (dist_to_ceil <= cfg["warm_dist_pct"]
+                and vol_ratio >= cfg["warm_vol_mult"]):
+            alert_tier = "WARM"
+        else:
+            alert_tier = "WATCH"
+    elif status == "WATCHING" and vol_ratio >= cfg["hot_vol_mult"] * 1.5:
+        # High-volume WATCHING stock — elevated demand even far from ceiling
+        alert_tier = "VOL-SURGE"
+
     return {
         "symbol":        symbol,
         "status":        status,
+        "alert_tier":    alert_tier,
         "close":         round(close, 2),
         "box_ceiling":   round(box_ceil, 2),
         "box_floor":     round(box_floor, 2),
@@ -423,20 +447,34 @@ def print_category(results: list[dict], status: str) -> None:
         ] for r in cat]
 
     elif status == "APPROACHING":
-        headers = ["Symbol", "Close", "Ceiling", "Dist%", "Floor",
-                   "Width%", "SL", "Target", "Vol×", "Days"]
-        rows = [[
-            r["symbol"],
-            fmt(r["close"]),
-            fmt(r["box_ceiling"]),
-            fmt(r.get("dist_to_ceil"), prefix="", suffix="%", decimals=1),
-            fmt(r["box_floor"]),
-            fmt(r["box_width_pct"], prefix="", suffix="%", decimals=1),
-            fmt(r["sl_price"]),
-            fmt(r["mm_target"]),
-            fmt(r["vol_ratio"], prefix="", suffix="×", decimals=2),
-            r["days_in_box"] or "-",
-        ] for r in cat]
+        # Sort HOT first, then WARM, then WATCH, then by distance
+        tier_order = {"HOT": 0, "WARM": 1, "WATCH": 2, "": 3}
+        cat = sorted(cat, key=lambda r: (
+            tier_order.get(r.get("alert_tier", ""), 3),
+            r.get("dist_to_ceil", 999)
+        ))
+        headers = ["Tier", "Symbol", "Close", "Ceiling", "Dist%",
+                   "Width%", "Vol x", "Days", "Action"]
+        rows = []
+        for r in cat:
+            tier = r.get("alert_tier", "")
+            if tier == "HOT":
+                action = "!! SET ALERT + consider starter pos"
+            elif tier == "WARM":
+                action = "Set TradingView alert today"
+            else:
+                action = "Monitor"
+            rows.append([
+                tier,
+                r["symbol"],
+                fmt(r["close"]),
+                fmt(r["box_ceiling"]),
+                fmt(r.get("dist_to_ceil"), prefix="", suffix="%", decimals=1),
+                fmt(r["box_width_pct"], prefix="", suffix="%", decimals=1),
+                fmt(r["vol_ratio"], prefix="", suffix="x", decimals=2),
+                r["days_in_box"] or "-",
+                action,
+            ])
 
     elif status == "BOX FORMING":
         headers = ["Symbol", "Close", "Pend.Ceil", "Pend.Floor",
