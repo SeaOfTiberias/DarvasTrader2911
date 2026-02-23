@@ -527,6 +527,63 @@ def save_watchlist(df: pd.DataFrame) -> None:
     print(f"  >> Watchlist saved  : {WATCHLIST_PATH}  ({len(df)} stocks)")
 
 
+def check_add_candidates(
+    results: list[dict],
+    wl: pd.DataFrame,
+) -> list[dict]:
+    """
+    Cross-reference today's scan results against open positions in the watchlist.
+
+    An ADD candidate is a stock where:
+      1. The watchlist has a POSITION OPEN entry with a known entry_price.
+      2. Today's scan found a *new* Darvas box whose ceiling is ABOVE the
+         original entry price  (i.e. the stock has formed a higher box).
+      3. The stock is now FRESH BREAKOUT or APPROACHING that higher ceiling
+         (i.e. it's on the cusp of the next leg up).
+
+    Returns a list of dicts, each containing the scan result enriched with
+    the original position details for display.
+    """
+    if wl is None or len(wl) == 0:
+        return []
+
+    # Find open positions in the watchlist
+    open_pos = wl[wl["status"] == "POSITION OPEN"] if "status" in wl.columns else wl.iloc[0:0]
+    if len(open_pos) == 0:
+        return []
+
+    add_candidates = []
+    result_map = {r["symbol"]: r for r in results}
+
+    for _, pos in open_pos.iterrows():
+        sym = pos["symbol"]
+        if sym not in result_map:
+            continue  # Not in today's scan — skip
+
+        scan = result_map[sym]
+        orig_entry = float(pos.get("entry_price") or 0)
+        new_ceiling = scan.get("box_ceiling") or 0
+        scan_status = scan.get("status", "")
+
+        # A new, higher box must exist above original entry
+        if orig_entry <= 0 or new_ceiling <= orig_entry:
+            continue
+
+        # Only flag if breakout imminent or happening
+        if scan_status not in ("FRESH BREAKOUT", "APPROACHING"):
+            continue
+
+        tier = scan.get("alert_tier", "")
+        candidate = scan.copy()
+        candidate["_add_orig_entry"] = orig_entry
+        candidate["_add_orig_qty"]   = int(pos.get("qty") or 0)
+        candidate["_add_tier"]       = tier
+        candidate["_add_gain_pct"]   = round((new_ceiling - orig_entry) / orig_entry * 100, 1)
+        add_candidates.append(candidate)
+
+    return add_candidates
+
+
 def merge_into_watchlist(wl: pd.DataFrame, results: list[dict],
                          cfg: dict) -> pd.DataFrame:
     """
@@ -736,8 +793,38 @@ def run_scan(chartink_symbols: list[str], cfg: dict) -> list[dict]:
     upgrades = [r for r in results if r.get("_upgraded")]
     if upgrades:
         print(f"\n  ** STATUS UPGRADES today : {', '.join(r['symbol'] for r in upgrades)}")
+
+    # ── Open Positions: ADD? check ────────────────────────────
+    add_candidates = check_add_candidates(results, wl)
+    if add_candidates:
+        print(f"\n{SEP}")
+        print(f"  [ADD?] OPEN POSITIONS -- ADD CANDIDATES  ({len(add_candidates)} stocks)")
+        print(f"  (New Darvas box formed ABOVE your entry -- breakout approaching)")
+        print(SEP)
+        for c in add_candidates:
+            tier_label = f"  [{c.get('_add_tier','?')}] " if c.get('_add_tier') else "  "
+            print(f"\n{tier_label}{c['symbol']}")
+            print(f"    Original entry      : Rs{c['_add_orig_entry']:,.2f}  "
+                  f"x {c['_add_orig_qty']} shares")
+            print(f"    New box ceiling     : Rs{c.get('box_ceiling',0):,.2f}  "
+                  f"(+{c['_add_gain_pct']}% above entry)")
+            print(f"    New box floor       : Rs{c.get('box_floor',0):,.2f}")
+            print(f"    New SL              : Rs{c.get('sl_price',0):,.2f}")
+            print(f"    New target          : Rs{c.get('mm_target',0):,.2f}")
+            print(f"    R:R                 : {c.get('rr_ratio',0):.2f}")
+            print(f"    Status              : {c['status']}  "
+                  f"| Dist to ceiling: {c.get('dist_to_ceil',0):.1f}%")
+            print(f"    Vol                 : {c.get('vol_ratio',0):.2f}x avg")
+            print(f"    >> Run: python scanner/place_order.py "
+                  f"--symbol {c['symbol']} --qty <N> --live")
+        print()
+
+    # ── Final summary lines ────────────────────────────────────
+    if add_candidates:
+        print(f"  [ADD?]  Open pos add candidates : "
+              f"{', '.join(c['symbol'] for c in add_candidates)}")
     if errors:
-        print(f"\n  Skipped (fetch error)    : {', '.join(errors)}")
+        print(f"  Skipped (fetch error)    : {', '.join(errors)}")
 
     # ── Update + save watchlist ────────────────────────────────
     wl = merge_into_watchlist(wl, results, cfg)
