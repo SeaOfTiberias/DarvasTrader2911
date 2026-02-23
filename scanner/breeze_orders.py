@@ -78,6 +78,27 @@ ORDER_CONFIG = {
     "validity":          "day",  # auto-cancel at session end
 }
 
+# ======================================================================
+#  ICICI DIRECT / BREEZE SYMBOL MAP
+#  NSE symbol  →  ICICI Direct internal stock_code
+#  Add entries here as you discover mapping differences.
+#  Reference: search at https://api.icicidirect.com/breezeapi/documents/
+# ======================================================================
+
+BREEZE_SYMBOL_MAP = {
+    # POLYCAB INDIA LTD
+    "POLYCAB":    "POLI",
+    # Add more as needed, e.g.:
+    # "CUMMINSIND": "CUMIND",
+    # "BAJFINANCE":  "BJFIN",
+}
+
+
+def get_breeze_code(nse_symbol: str) -> str:
+    """Return the ICICI Direct stock_code for a given NSE symbol."""
+    return BREEZE_SYMBOL_MAP.get(nse_symbol.upper(), nse_symbol.upper())
+
+
 
 # ======================================================================
 #  BREEZE CONNECTION
@@ -300,7 +321,7 @@ def place_basket(
     for o in orders:
         try:
             resp = breeze.place_order(
-                stock_code    = o["symbol"],
+                stock_code    = get_breeze_code(o["symbol"]),
                 exchange_code = o["exchange"],
                 product       = o["product"],
                 action        = o["action"],
@@ -309,14 +330,20 @@ def place_basket(
                 price         = str(o["entry_price"]),
                 stoploss      = str(o["sl_price"]),
                 validity      = o["validity"],
-                user_remark   = f"DarvasHOT_{datetime.now().strftime('%Y%m%d')}",
+                user_remark   = f"Darvas{datetime.now().strftime('%Y%m%d')}",
             )
-            success  = (resp.get("Success") or {})
-            order_id = success.get("order_id", "")
-            o["order_id"] = order_id
-            o["status"]   = "PLACED"
-            print(f"  PLACED  : {o['symbol']:<14}  order_id={order_id}"
-                  f"  entry=Rs{o['entry_price']:.2f}  qty={o['quantity']}")
+            o["api_response"] = str(resp)  # full log for debugging
+            if resp.get("Error"):
+                o["status"] = "ERROR"
+                o["error"]  = str(resp["Error"])
+                print(f"  ERROR   : {o['symbol']:<14}  API error: {resp['Error']}")
+            else:
+                success  = (resp.get("Success") or {})
+                order_id = success.get("order_id", "")
+                o["order_id"] = order_id
+                o["status"]   = "PLACED"
+                print(f"  PLACED  : {o['symbol']:<14}  order_id={order_id}"
+                      f"  entry=Rs{o['entry_price']:.2f}  qty={o['quantity']}")
 
         except Exception as exc:
             o["status"] = "ERROR"
