@@ -44,3 +44,13 @@ data/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Generated reports (HTML output from _morning_report.py)
+scanner/reports/
+
+# Scanner output / debug text files
+scanner/last_results.txt
+scanner/tier_output.txt
+
+# Power BI scratch folder
+PBI/
