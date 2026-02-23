@@ -89,6 +89,8 @@ WATCHLIST_COLS = [
     "symbol", "date_added", "date_updated", "prev_status", "status",
     "box_ceiling", "box_floor", "box_width_pct", "sl_price",
     "mm_target", "days_in_box", "source",
+    # Position tracking (set when an order is placed)
+    "entry_price", "qty", "notes",
 ]
 
 # ── Default universe (from Chartink paste) ───────────────────
@@ -601,10 +603,19 @@ def merge_into_watchlist(wl: pd.DataFrame, results: list[dict],
     max_days  = cfg.get("watchlist_days", 45)
     wl        = wl.copy()
 
+    # Statuses managed externally -- scanner must never overwrite these
+    PROTECTED_STATUSES = {"POSITION OPEN", "POSITION CLOSED", "MANUAL"}
+
     for r in results:
         sym    = r["symbol"]
         status = r["status"]
         exists = sym in wl["symbol"].values if len(wl) > 0 else False
+
+        # Never touch rows the user has manually set (open positions etc.)
+        if exists:
+            current_status = wl.loc[wl["symbol"] == sym, "status"].iloc[0]
+            if current_status in PROTECTED_STATUSES:
+                continue
 
         if status == "FRESH BREAKOUT":
             # Graduate — remove from watchlist (mission accomplished)
@@ -646,13 +657,19 @@ def merge_into_watchlist(wl: pd.DataFrame, results: list[dict],
             wl.at[idx, "status"]       = status
 
     # ── Auto-expire entries older than watchlist_days ────────
+    # Protected statuses (open positions etc.) are NEVER expired automatically
     if "date_added" in wl.columns and len(wl) > 0:
         wl["date_added"] = pd.to_datetime(wl["date_added"], errors="coerce")
         age = (pd.Timestamp.today() - wl["date_added"]).dt.days
-        expired = wl[age > max_days]["symbol"].tolist()
+        if "status" in wl.columns:
+            protected_mask = wl["status"].isin(PROTECTED_STATUSES)
+        else:
+            protected_mask = pd.Series(False, index=wl.index)
+        expired_mask = (age > max_days) & ~protected_mask
+        expired = wl[expired_mask]["symbol"].tolist()
         if expired:
             print(f"  >> Expired from watchlist ({max_days}d): {', '.join(expired)}")
-        wl = wl[age <= max_days]
+        wl = wl[~expired_mask]
 
     return wl
 
