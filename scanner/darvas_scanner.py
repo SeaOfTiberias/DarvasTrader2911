@@ -786,6 +786,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="Darvas Box Scanner -- NSE stocks from Chartink + watchlist",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  # Daily scan only:\n"
+            "  python scanner/darvas_scanner.py --file scanner/symbols.txt\n\n"
+            "  # Scan + preview basket orders (safe, no orders placed):\n"
+            "  python scanner/darvas_scanner.py --file scanner/symbols.txt --auto-order\n\n"
+            "  # Scan + PLACE LIVE orders for HOT stocks:\n"
+            "  python scanner/darvas_scanner.py --file scanner/symbols.txt --auto-order --live\n\n"
+            "  # LIVE orders with custom risk per trade (default Rs5000):\n"
+            "  python scanner/darvas_scanner.py --file scanner/symbols.txt --auto-order --live --risk 10000\n"
+        ),
     )
     parser.add_argument(
         "--symbols", type=str, default=DEFAULT_SYMBOLS,
@@ -798,6 +809,18 @@ def main():
     parser.add_argument(
         "--show-watchlist", action="store_true",
         help="Print the current watchlist and exit"
+    )
+    parser.add_argument(
+        "--auto-order", action="store_true",
+        help="After scan, build basket orders for HOT tier stocks (dry-run by default)"
+    )
+    parser.add_argument(
+        "--live", action="store_true",
+        help="PLACE ACTUAL ORDERS via Breeze API (requires --auto-order). Default is dry-run."
+    )
+    parser.add_argument(
+        "--risk", type=float, default=5000.0,
+        help="Max INR risk per trade for position sizing (default: 5000)"
     )
     args = parser.parse_args()
 
@@ -821,7 +844,31 @@ def main():
         print("No symbols provided. Exiting.")
         sys.exit(1)
 
-    run_scan(symbols, CONFIG)
+    results = run_scan(symbols, CONFIG)
+
+    # ── Auto-order: build basket for HOT tier stocks ───────────────
+    if args.auto_order:
+        hot_stocks = [r for r in results if r.get("alert_tier") == "HOT"]
+
+        if not hot_stocks:
+            print("\n  No HOT tier stocks found -- no basket orders to place.")
+            print("  (HOT = within 2% of ceiling AND volume >= 2x average)\n")
+        else:
+            print(f"\n  {len(hot_stocks)} HOT stock(s) identified for basket orders.")
+            if args.live:
+                print("  MODE: LIVE -- placing actual orders via Breeze API")
+            else:
+                print("  MODE: DRY RUN -- add --live flag to place actual orders")
+
+            from breeze_orders import place_basket, ORDER_CONFIG
+            order_cfg = ORDER_CONFIG.copy()
+            order_cfg["risk_per_trade"] = args.risk
+
+            place_basket(
+                hot_results=hot_stocks,
+                order_cfg=order_cfg,
+                dry_run=not args.live,
+            )
 
 
 if __name__ == "__main__":
